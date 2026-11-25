@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledgerline Demand Generation and Cost of Acquisition Reporting</title>
+<style>
+  /* Design tokens. The artifact host supplied these for the prototype; the app defines its own. */
+  :root {
+    /* Brand palette */
+    --coral: #F54D46; --coral-dark: #D93A33; --slate: #304659; --cream: #F8F7F2; --white: #FFFFFF; --ink: #101E28; --muted: #61717A;
+    --line: #E4E2D9;
+    /* Tokens the dashboard styles read, mapped onto the palette */
+    --color-bg: var(--cream); --color-panel: var(--white); --color-fg: var(--slate); --color-fg-muted: var(--muted);
+    --color-border-line: var(--line); --color-warn: #A35F00; --color-ok: #2D7A46; --color-bad: #B3261E;
+    --cds-text-secondary: var(--muted); --cds-surface-popover: var(--white); --cds-shadow-popover: 0 4px 16px rgba(16,30,40,.14);
+    --cds-border: 1px solid var(--line); --cds-radius: 8px;
+    --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 12px; --cds-gap-lg: 20px; --cds-pad-lg: 20px;
+    --cds-font-size-caption: 13px; --cds-font-size-body: 17px; --cds-font-size-heading: 20px; --cds-font-size-title: 30px;
+    --cds-font-weight-medium: 600;
+    --cds-chart-muted: #A9B3B8; --cds-chart-reference: var(--ink); --cds-chart-status-critical: var(--color-bad);
+    --font-anthropic-sans: Manrope, Arial, sans-serif;
+    --font-anthropic-serif: Manrope, Arial, sans-serif;
+  }
+  html { background: var(--cream); }
+  body { margin: 0; background: var(--cream); color: var(--slate); font: 400 17px/1.6 Manrope, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .mk h1, .mk-upload h1 { font-weight: 700; color: var(--ink); letter-spacing: -0.01em; line-height: 1.2; }
+  .mk h2, .mk h3, .mk h4, .mk-upload h2 { color: var(--ink); }
+  .mk-tile .mk-big { color: var(--ink); font-weight: 700; }
+  input[type=range], input[type=checkbox] { accent-color: var(--slate); }
+  .mk-tab[aria-selected="true"] { box-shadow: inset 0 -3px 0 var(--coral); color: var(--ink); }
+  .mk-drill:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  body { padding: 24px; max-width: 1280px; margin: 0 auto; }
+  [hidden] { display: none !important; }
+  .mk-upload { max-width: 960px; }
+  .mk-upload h1 { font-family: var(--font-anthropic-serif); font-size: var(--cds-font-size-title); margin: 0 0 8px; }
+  .mk-upload h2 { font-size: var(--cds-font-size-heading); margin: 20px 0 6px; }
+  .mk-upload p { line-height: 1.5; margin: 6px 0; }
+  .mk-upload table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; }
+  .mk-upload th, .mk-upload td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: var(--cds-border); }
+  .mk-upload th { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); }
+  .mk-upload td.mk-fname { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+  .mk-upload td.mk-cols { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .mk-upload td.mk-state { white-space: nowrap; }
+  .mk-upload .mk-errors { color: var(--color-bad); }
+  .mk-upload .mk-noscript { padding: 10px 12px; border: 1px solid var(--color-warn); border-radius: var(--cds-radius); background: #FDF3E4; }
+  .mk-upload .mk-pick { display: inline-block; padding: 12px 22px; border: 1px solid var(--coral); border-radius: var(--cds-radius); background: var(--coral); color: var(--white); cursor: pointer; font-weight: 600; font-size: 16px; box-shadow: 0 1px 3px rgba(16,30,40,.18); }
+  .mk-upload .mk-pick:hover { background: var(--coral-dark); }
+  .mk-upload .mk-pick:focus-within { outline: 2px solid var(--coral); }
+  .mk-ai-key { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0 4px; }
+  .mk-pay-other { border-top: var(--cds-border); padding-top: 6px; margin-top: 4px; }
+  .mk-masked { -webkit-text-security: disc; text-security: disc; }
+  .mk-ai-key input { flex: 1; min-width: 260px; padding: 6px 8px; border: var(--cds-border); border-radius: 6px; font: inherit; }
+  .mk-ai h3 { font-size: var(--cds-font-size-body); margin: 14px 0 4px; }
+  .mk-ai .mk-rec-meta { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  #ai-status.mk-error { color: var(--color-bad); }
+  dialog#ai-preview { max-width: 760px; width: calc(100% - 48px); border: var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: 20px 24px; }
+  dialog#ai-preview pre { max-height: 320px; overflow: auto; background: var(--color-panel); padding: 8px; font-size: 11px; white-space: pre-wrap; }
+  .mk-ai-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  button.mk-btn.mk-btn-primary { background: var(--coral); color: var(--white); border-color: var(--coral); font-weight: 600; }
+  .mk-ai p { margin: 6px 0; }
+  .mk-ai-go { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0 6px; }
+  .mk-ai-go .mk-ai-key { flex: 1; min-width: 280px; margin: 0; }
+  .mk-ai-go #ai-ready { flex: 1; margin: 0; }
+  button.mk-btn.mk-btn-cta { background: var(--coral); color: var(--white); border-color: var(--coral); font-size: 16px; font-weight: 600; padding: 12px 22px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  button.mk-btn.mk-btn-cta:hover { background: var(--coral-dark); border-color: var(--coral-dark); }
+  button.mk-btn.mk-btn-cta:disabled { opacity: .6; cursor: progress; }
+  .mk-ai-keyinfo { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .mk-ai-keyinfo summary { cursor: pointer; }
+  .mk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #ai-recs { border-color: var(--line); border-top: 4px solid var(--coral); }
+  .mk table.mk-hyg { width: 100%; table-layout: fixed; border-collapse: collapse; }
+  .mk .mk-hyg th, .mk .mk-hyg td { vertical-align: top; text-align: left; white-space: normal; line-height: 1.45; }
+  .mk .mk-hyg td.mk-r, .mk .mk-hyg th.mk-r { text-align: right; white-space: nowrap; }
+  .mk-hyg col.c-n { width: 32px; } .mk-hyg col.c-p { width: 84px; } .mk-hyg col.c-i { width: 24%; } .mk-hyg col.c-r { width: 128px; }
+  .mk-hyg td:nth-child(3) { font-weight: 600; }
+  .mk-hyg .mk-area { display: block; font-weight: normal; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .mk-hyg .mk-examples { display: block; font-weight: normal; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin-top: 2px; word-break: break-word; }
+  .mk-passed { list-style: none; padding: 0; margin: 8px 0 0; columns: 2 380px; column-gap: 24px; font-size: 14px; }
+  .mk-passed li { break-inside: avoid; margin: 0 0 6px; }
+  .mk-passed .mk-area { display: block; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin-left: 1.2em; }
+  .mk-pri { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: var(--cds-font-size-caption); font-weight: 600; white-space: nowrap; }
+  .mk-pri-High { background: #fbe3e1; color: #8c1d16; }
+  .mk-pri-Medium { background: #fdf0d8; color: #7a4a00; }
+  .mk-pri-Low { background: #E6EBEF; color: var(--slate); }
+  .mk-pri-Info { background: #ECEBE5; color: var(--muted); }
+  /* AI answer: recommendation cards colored by impact, findings grouped by topic */
+  .mk-ai-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+  .mk-ai-head h3 { margin: 0; }
+  .mk-ai-legend { margin: 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: var(--cds-font-size-caption); }
+  .mk-legend-sep { margin-left: 8px; color: var(--color-fg-muted); }
+  .mk-recs { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 10px; counter-reset: rec; }
+  .mk-rec { counter-increment: rec; background: var(--color-bg); border: var(--cds-border); border-left: 6px solid var(--imp); border-radius: 8px; padding: 12px 14px 12px 46px; position: relative; }
+  .mk-rec::before { content: counter(rec); position: absolute; left: 12px; top: 12px; width: 24px; height: 24px; border-radius: 50%; background: var(--imp); color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  .mk-rec-high { --imp: var(--coral); } .mk-rec-medium { --imp: var(--slate); } .mk-rec-low { --imp: #A9B3B8; }
+  .mk-rec-title { font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.35; margin: 0 0 6px; }
+  .mk-rec-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .mk-imp, .mk-conf, .mk-area-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .mk-imp-high { background: var(--coral); color: var(--white); } .mk-imp-medium { background: var(--slate); color: var(--white); } .mk-imp-low { background: #A9B3B8; color: var(--ink); }
+  .mk-conf { background: #fff; border: 1px solid currentColor; }
+  .mk-conf-high { color: var(--ink); } .mk-conf-medium { color: var(--muted); } .mk-conf-low { color: var(--color-warn); }
+  .mk-area-tag { background: var(--color-panel); color: var(--color-fg); border: var(--cds-border); font-weight: 500; }
+  .mk-rec ul { margin: 0 0 6px; padding-left: 18px; font-size: 15px; } .mk-rec li { margin: 2px 0; line-height: 1.45; }
+  .mk-rec-impact { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: 0; }
+  .mk-findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; margin-top: 8px; }
+  .mk-fgroup { background: var(--color-bg); border: var(--cds-border); border-top: 4px solid var(--fc); border-radius: 8px; padding: 10px 12px; }
+  .mk-fgroup h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; color: var(--fc); }
+  .mk-fgroup ul { margin: 0; padding-left: 16px; font-size: 15px; } .mk-fgroup li { margin: 6px 0; line-height: 1.45; }
+  .mk-fgroup li b { display: block; }
+  #ai-result > h3 { margin-top: 22px; }
+  .mk-ai-caveats { margin-top: 14px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .mk-ai-caveats summary { cursor: pointer; font-weight: 600; }
+  .mk-btn-sm { font-size: var(--cds-font-size-caption); padding: 2px 8px; margin-left: 6px; }
+</style>
+<link rel="stylesheet" href="mk.css">
+</head>
+<body>
+
+<section class="mk-upload" id="mk-upload" aria-labelledby="up-title">
+  <h1 id="up-title">Ledgerline Demand Generation and Cost of Acquisition Reporting</h1>
+  <p>This dashboard is built from 8 CSV exports from the Ledgerline data room. Export the files listed below, then select all 8 at once with the button. You can hold Cmd (Mac) or Ctrl (Windows) to pick several files, or press Cmd+A / Ctrl+A in a folder that holds only these files.</p>
+  <p class="mk-muted">The files stay on this computer: nothing is uploaded anywhere, and nothing is saved when you close the tab. File names don't have to match. The app recognizes each file by its column headings, so a renamed file works as long as it has the columns shown.</p>
+
+  <h2>Files to select</h2>
+  <table aria-describedby="up-title">
+    <thead><tr><th scope="col">Data room file</th><th scope="col">What it is</th><th scope="col">Columns it must have</th><th scope="col">Status</th></tr></thead>
+    <tbody id="mk-expected">
+      <!-- file-table:start (generated by scripts/upload-table.js) -->
+      <tr data-kind="leads"><td class="mk-fname">leads.csv</td><td>CRM lead export: one row per lead, with its channel, status and any linked opportunity.</td><td class="mk-cols">lead_id, created_at, channel, source_form, status, disqualified_reason, owner, company, job_title, company_size_reported, country, opportunity_id</td><td class="mk-state mk-muted">not loaded yet</td></tr>
+      <tr data-kind="opportunities"><td class="mk-fname">opportunities.csv</td><td>CRM opportunity export: one row per deal, with its stage, ARR and close date.</td><td class="mk-cols">opportunity_id, source_channel, type, customer_id, created_date, stage, close_date, amount_arr, plan, loss_reason</td><td class="mk-state mk-muted">not loaded yet</td></tr>
+      <tr data-kind="customers"><td class="mk-fname">customers.csv</td><td>Customer list: one row per customer, with plan, signup date, churn date and acquisition channel.</td><td class="mk-cols">customer_id, signup_date, acquisition_channel, name, industry, country, plan, status, churn_date, churn_reason, current_arr</td><td class="mk-state mk-muted">not loaded yet</td></tr>
+      <tr data-kind="contracts"><td class="mk-fname">contracts.csv</td><td>Contract history: one row per contract term, with its ARR.</td><td class="mk-cols">customer_id, term_start, arr</td><td class="mk-state mk-muted">not loaded yet</td></tr>
+      <tr data-kind="spend"><td class="mk-fname">marketing_spend_monthly.csv</td><td>Marketing program spend by month and channel.</td><td class="mk-cols">month, channel, spend</td><td class="mk-state mk-muted">not loaded yet</td></tr>
+      <tr data-kind="funnel"><td class="mk-fname">web_funnel_monthly.csv</td><td>Website sessions and funnel counts by month and channel.</td><td class="mk-cols">month, channel, website_sessions</td><td class="mk-state mk-muted">not loaded yet</td></tr>
+      <tr data-kind="payroll"><td class="mk-fname">payroll_monthly.csv</td><td>Payroll cost by month and department (Sales, Marketing).</td><td class="mk-cols">month, department, payroll_cost</td><td class="mk-state mk-muted">not loaded yet</td></tr>
+      <tr data-kind="employees"><td class="mk-fname">employees.csv</td><td>Staff list with title, department, start and end dates, and base salary.</td><td class="mk-cols">employee_id, base_salary_usd, title, department, start_date, end_date</td><td class="mk-state mk-muted">not loaded yet</td></tr>
+      <!-- file-table:end -->
+    </tbody>
+  </table>
+
+  <p class="mk-noscript" id="mk-noscript"><b>The app isn’t running in this window.</b> This page needs JavaScript, and this viewer didn’t run it. Open <code>index.html</code> in Google Chrome: in Finder, right-click it and choose Open With &gt; Google Chrome. You can still read the file list above here.</p>
+
+  <label class="mk-pick" id="mk-pick">Choose the 8 CSV files…
+    <input type="file" id="mk-file" accept=".csv,text/csv" multiple style="position:absolute;opacity:0;width:1px;height:1px">
+  </label>
+  <p class="mk-muted" id="mk-status" role="status" aria-live="polite"></p>
+  <ul class="mk-errors" id="mk-errors"></ul>
+</section>
+
+<div class="mk" id="mk-root" hidden>
+  <header id="top">
+    <h1>Ledgerline Demand Generation and Cost of Acquisition Reporting</h1>
+    <p class="mk-muted" style="margin-top:4px">Data as of <b class="mk-asof-long">—</b> (<span class="mk-asof-src">—</span>). <button class="mk-btn mk-btn-sm" id="btn-reload" type="button">Load new files</button><br> Click any underlined number to open the records behind it in the Data explorer. <span class="mk-thin" style="color:var(--color-fg-muted)">Thin data</span> marks a figure with too few records to decide on; hover or tap it for detail.</p>
+  </header>
+
+  <nav class="mk-tabs" role="tablist" aria-label="Dashboard sections">
+    <button class="mk-tab" role="tab" type="button" data-tab="summary" aria-selected="true">Summary</button>
+    <button class="mk-tab" role="tab" type="button" data-tab="demand-gen" aria-selected="false">Demand gen &amp; CAC</button>
+    <button class="mk-tab" role="tab" type="button" data-tab="churn" aria-selected="false">Churn by plan &amp; source</button>
+    <button class="mk-tab" role="tab" type="button" data-tab="benchmarks" aria-selected="false">Benchmarks</button>
+    <button class="mk-tab" role="tab" type="button" data-tab="explorer" aria-selected="false">Data explorer</button>
+    <button class="mk-tab" role="tab" type="button" data-tab="hygiene" aria-selected="false">Data hygiene</button>
+  </nav>
+
+  <!-- ======================= SUMMARY ======================= -->
+  <section id="summary" class="mk-panel" role="tabpanel">
+    <div class="mk-card mk-ai" id="ai-recs">
+      <h2>AI recommendations</h2>
+      <p class="mk-muted">Claude reviews the figures for <b data-draw="sum-window">—</b> (churn: customers signed <b data-draw="sum-cwindow">—</b>) and recommends where to cut CAC. Only aggregate numbers are sent, never customer data, and you confirm before anything is sent.</p>
+      <div class="mk-ai-go">
+        <div class="mk-ai-key" id="ai-key-row">
+          <label for="ai-key" class="mk-sr">Anthropic API key</label>
+          <input id="ai-key" type="text" class="mk-masked" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" aria-describedby="ai-key-note" placeholder="Paste your Anthropic API key">
+        </div>
+        <p id="ai-ready" class="mk-muted" hidden>API key held in this tab's memory. <button class="mk-btn mk-btn-sm" type="button" id="ai-forget">Forget key</button></p>
+        <button class="mk-btn mk-btn-cta" type="button" id="ai-generate">Generate AI recommendations</button>
+      </div>
+      <details class="mk-ai-keyinfo">
+        <summary>About your API key</summary>
+        <p id="ai-key-note">The key stays in this tab's memory only and is gone when you close it. The call goes straight from this browser to Anthropic, so anyone with developer tools open, or a browser extension that can read local files, could read the key. Use a dedicated key with a low spend limit, revoke it when you're done, and give each person their own.</p>
+      </details>
+      <p id="ai-status" role="status" aria-live="polite"></p>
+      <div id="ai-result" hidden>
+        <div class="mk-ai-head"><h3>Recommendations</h3>
+          <p class="mk-ai-legend" aria-label="Legend"><span class="mk-imp mk-imp-high">High impact</span><span class="mk-imp mk-imp-medium">Medium impact</span><span class="mk-imp mk-imp-low">Low impact</span><span class="mk-legend-sep">Confidence:</span><span class="mk-conf mk-conf-high">high</span><span class="mk-conf mk-conf-medium">medium</span><span class="mk-conf mk-conf-low">low</span></p></div>
+        <ol class="mk-recs" id="ai-recs-list"></ol>
+        <h3>Findings by topic</h3>
+        <div class="mk-findings" id="ai-findings"></div>
+        <details class="mk-ai-caveats" open><summary>Caveats about these figures</summary><ul class="mk-list" id="ai-caveats"></ul></details>
+        <p class="mk-muted" id="ai-meta" style="font-size:var(--cds-font-size-caption)"></p>
+      </div>
+    </div>
+    <!-- Rule-based summary: hidden while the AI recommendations answer these parts. Remove `hidden` to show it again. -->
+    <div class="mk-card" id="sum-findings-card" hidden>
+      <h2>What the numbers say</h2>
+      <ul class="mk-list" data-draw="sum-findings" data-source="cac_summary funnel_total channel_actuals mql_outcomes churn_by_channel churn_by_plan bench_live data_health"></ul>
+    </div>
+    <div class="mk-card" id="sum-recs-card" hidden>
+      <h2>Recommendations</h2>
+      <p class="mk-muted" style="margin-bottom:8px">Only where the data supports a call. Channels or cohorts flagged as thin data are named, not acted on.</p>
+      <ol class="mk-list" data-draw="sum-recs" data-source="cac_summary funnel_total channel_actuals mql_outcomes churn_by_plan data_health"></ol>
+    </div>
+    <div class="mk-card" id="sum-questions" hidden>
+      <h2>Questions to answer next</h2>
+      <ul class="mk-list">
+        <li>Which ICP rules send MQLs to Nurture, and should part of Nurture go back to the SDR instead of a generic email sequence?</li>
+        <li>How is marketing payroll really split across channels? Every channel cost-per moves with the payroll sliders on the Demand gen tab.</li>
+        <li>Is paid social buying awareness that later shows up as direct or organic leads? First-touch channel data alone can't answer that.</li>
+        <li>What does campaign-level spend look like inside paid search and paid social? That data is not in the data room yet.</li>
+        <li>Why do Core-plan customers churn more in year one: fit, onboarding speed, or price?</li>
+        <li>Do referral- and organic-sourced customers also expand more, not just churn less?</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ======================= DEMAND GEN ======================= -->
+  <section id="demand-gen" class="mk-panel" role="tabpanel" hidden>
+    <p class="mk-lede">
+      <span data-draw="window-label">—</span>: demand gen spent
+      <b data-draw="k-dgcost" data-source="cac_summary" data-field="dg_cost" data-row="0">—</b>
+      to win <b data-draw="k-won" data-source="cac_summary" data-field="won" data-row="0">—</b> new customers, or
+      <b data-draw="k-dgcac2" data-source="cac_summary" data-field="dg_cac" data-row="0">—</b> each against a
+      <b data-draw="t-dgcac">—</b> target. <span data-draw="lede-verdict">—</span>
+    </p>
+    <section id="controls" class="mk-controls">
+      <label>From <select class="dash-select" data-draw="m-start" aria-label="Start month" data-source="spend_month"></select></label>
+      <label>To <select class="dash-select" data-draw="m-end" aria-label="End month" data-source="spend_month"></select></label>
+      <button class="mk-btn" id="btn-ttm" type="button">Trailing 12 months</button>
+      <button class="mk-btn" id="btn-all" type="button">All (<span class="mk-funnel-start">—</span> – <span class="mk-asof-month">—</span>)</button>
+    </section>
+
+    <section id="kpis" class="mk-tiles">
+      <div class="mk-card mk-tile" id="tile-dgcac">
+        <div class="mk-muted">Demand gen cost per new customer</div>
+        <div class="mk-big" data-draw="k-dgcac" data-source="cac_summary" data-field="dg_cac" data-row="0">—</div>
+        <div class="mk-vs">Target <span data-draw="t-dgcac">—</span> · <span data-draw="g-dgcac">—</span></div>
+      </div>
+      <div class="mk-card mk-tile" id="tile-fullcac">
+        <div class="mk-muted">Full CAC per new customer</div>
+        <div class="mk-big" data-draw="k-fullcac" data-source="cac_summary" data-field="full_cac" data-row="0">—</div>
+        <div class="mk-vs">Target <span data-draw="t-cac">—</span> · <span data-draw="g-fullcac">—</span></div>
+      </div>
+      <div class="mk-card mk-tile" id="tile-ratio">
+        <div class="mk-muted">CAC ratio (S&amp;M cost ÷ new ARR)</div>
+        <div class="mk-big" data-draw="k-ratio" data-source="cac_summary" data-field="cac_ratio" data-row="0">—</div>
+        <div class="mk-vs">Target <span data-draw="t-ratio">—</span> · ACV <span data-draw="k-acv" data-source="cac_summary" data-field="acv" data-row="0">—</span></div>
+      </div>
+      <div class="mk-card mk-tile" id="tile-share">
+        <div class="mk-muted">Demand gen share of CAC</div>
+        <div class="mk-big" data-draw="k-share" data-source="cac_summary" data-field="dg_share_pct" data-row="0">—</div>
+        <div class="mk-vs">Assumed <span data-draw="t-share">—</span> in targets</div>
+      </div>
+    </section>
+
+    <section id="funnel" class="mk-two">
+      <div class="mk-card">
+        <h2>Blended funnel: actual vs target</h2>
+        <p class="mk-muted" style="margin-bottom:8px">All channels including outbound. Cost-per uses the demand gen cost pool at every stage. Conversion is to the next stage.</p>
+        <div class="mk-scroll">
+          <table data-source="funnel_total" data-row-key="stage" id="funnel-table">
+            <thead><tr><th data-field="stage">Stage</th><th data-field="count">Count</th><th data-field="cost_per">Cost per</th><th>Target</th><th data-field="cvr_next_pct">CVR to next</th><th>Target</th></tr></thead>
+            <tbody data-draw="funnel-rows"></tbody>
+          </table>
+        </div>
+        <h3 style="margin-top:16px">Where MQLs that were not accepted went</h3>
+        <div class="mk-scroll">
+          <table data-source="mql_outcomes" data-row-key="outcome" id="mql-outcomes">
+            <thead><tr><th data-field="outcome">Outcome</th><th data-field="count">MQLs</th><th data-field="pct_of_mqls">% of all MQLs</th></tr></thead>
+            <tbody data-draw="mql-outcome-rows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mk-card" id="targets">
+        <h2>Target model, for 1 customer</h2>
+        <p class="mk-muted" style="margin-bottom:8px">Edit the shaded inputs. Every target on the page updates.</p>
+        <table>
+          <tbody>
+            <tr class="mk-in-row"><td>ACV</td><td><input class="mk-input" type="number" step="500" min="0" data-param="acv" aria-label="ACV"></td><td class="mk-sub">Input</td></tr>
+            <tr class="mk-in-row"><td>Target CAC ratio</td><td><input class="mk-input" type="number" step="0.01" min="0" data-param="cac_ratio" aria-label="Target CAC ratio"></td><td class="mk-sub">New-name median, $10–25K ACV</td></tr>
+            <tr><td>CAC $</td><td data-draw="t-cac">—</td><td class="mk-sub">Output</td></tr>
+            <tr class="mk-in-row"><td>% of CAC for demand gen</td><td><input class="mk-input" type="number" step="1" min="0" max="100" data-param="dg_share" aria-label="Percent of CAC for demand gen"></td><td class="mk-sub">Input, %</td></tr>
+            <tr><td>Demand gen CAC $</td><td data-draw="t-dgcac">—</td><td class="mk-sub">Output = target cost per customer</td></tr>
+            <tr><td>Customer count</td><td>1</td><td class="mk-sub">Static</td></tr>
+            <tr class="mk-in-row"><td>Close rate (Opp → Won)</td><td><input class="mk-input" type="number" step="1" min="1" max="100" data-param="close_rate" aria-label="Close rate"></td><td class="mk-sub">Input, %</td></tr>
+            <tr><td>Opp count</td><td data-draw="t-opps">—</td><td class="mk-sub">Output</td></tr>
+            <tr><td>Target cost per opp</td><td data-draw="t-cpopp">—</td><td class="mk-sub">Output</td></tr>
+            <tr class="mk-in-row"><td>SAL → Opp CVR</td><td><input class="mk-input" type="number" step="1" min="1" max="100" data-param="sal_opp" aria-label="SAL to Opp conversion"></td><td class="mk-sub">Input, %</td></tr>
+            <tr><td>SAL count</td><td data-draw="t-sals">—</td><td class="mk-sub">Output</td></tr>
+            <tr><td>Target cost per SAL</td><td data-draw="t-cpsal">—</td><td class="mk-sub">Output</td></tr>
+            <tr class="mk-in-row"><td>MQL → SAL CVR</td><td><input class="mk-input" type="number" step="1" min="1" max="100" data-param="mql_sal" aria-label="MQL to SAL conversion"></td><td class="mk-sub">Input, %</td></tr>
+            <tr><td>MQL count</td><td data-draw="t-mqls">—</td><td class="mk-sub">Output</td></tr>
+            <tr><td>Target cost per MQL</td><td data-draw="t-cpmql">—</td><td class="mk-sub">Key output</td></tr>
+            <tr class="mk-in-row"><td>Lead → MQL rate</td><td><input class="mk-input" type="number" step="1" min="1" max="100" data-param="lead_mql" aria-label="Lead to MQL rate"></td><td class="mk-sub">Input, %</td></tr>
+            <tr><td>Lead count</td><td data-draw="t-leads">—</td><td class="mk-sub">Output</td></tr>
+            <tr><td>Target cost per lead</td><td data-draw="t-cpl">—</td><td class="mk-sub">Output</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:8px"><button class="mk-btn" id="btn-reset-targets" type="button">Reset targets</button></p>
+      </div>
+    </section>
+
+    <section id="channel-chart" class="mk-card">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:end;margin-bottom:8px">
+        <div>
+          <h2>Cost per stage by channel</h2>
+          <p class="mk-muted">Dashed line is the target. Click a bar to see the records behind it.</p>
+        </div>
+        <select class="dash-select" id="metric-select" aria-label="Metric">
+          <option value="cpl">Cost per lead</option>
+          <option value="cpmql">Cost per MQL</option>
+          <option value="cpsal" selected>Cost per SAL</option>
+          <option value="cpopp">Cost per opp</option>
+          <option value="cpwon">Cost per customer</option>
+        </select>
+      </div>
+      <div class="mk-chart" data-draw="chart" data-source="channel_actuals" style="min-height:300px"></div>
+    </section>
+
+    <section id="channel-costs" class="mk-card">
+      <h2>Cost-per by channel</h2>
+      <p class="mk-muted" style="margin-bottom:8px">Green is at or under target, red is over. Demand gen cost = program spend + allocated marketing payroll + SDR share (inbound) or AE prospecting time (outbound).</p>
+      <div class="mk-scroll">
+        <table data-source="channel_actuals" data-row-key="channel">
+          <thead><tr>
+            <th data-field="channel">Channel</th><th data-field="program_spend">Program</th><th data-field="payroll_cost">Mktg payroll</th><th data-field="sdr_cost">SDR</th><th data-field="outbound_cost">AE prospecting</th><th data-field="dg_cost">Demand gen cost</th>
+            <th data-field="cpl">Per lead</th><th data-field="cpmql">Per MQL</th><th data-field="cpsal">Per SAL</th><th data-field="cpopp">Per opp</th><th data-field="cpwon">Per customer</th><th data-field="acv">Won ACV</th>
+          </tr></thead>
+          <tbody data-draw="cost-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="channel-cvr" class="mk-card">
+      <h2>Volume and conversion by channel</h2>
+      <p class="mk-muted" style="margin-bottom:8px">Colored against the target conversion rates.</p>
+      <div class="mk-scroll">
+        <table data-source="channel_actuals" data-row-key="channel">
+          <thead><tr>
+            <th data-field="channel">Channel</th><th data-field="leads">Leads</th><th data-field="mqls">MQLs</th><th data-field="sals">SALs</th><th data-field="opps">Opps</th><th data-field="won">Won</th>
+            <th data-field="lead_mql_pct">Lead→MQL</th><th data-field="mql_sal_pct">MQL→SAL</th><th data-field="sal_opp_pct">SAL→Opp</th><th data-field="win_rate_pct">Opp→Won</th><th data-field="new_arr">New ARR</th>
+          </tr></thead>
+          <tbody data-draw="cvr-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="payroll" class="mk-card">
+      <h2>Marketing payroll allocation</h2>
+      <p class="mk-muted" style="margin-bottom:10px">Placeholder split until the team sets a real one. Use <b>Other</b> for marketing payroll spent on work that isn't demand gen, such as Customer Success: it is left out of demand gen cost, every cost-per and Full CAC. Channel sliders you haven't moved share the rest by their share of inbound leads in the window.</p>
+      <div class="mk-pay">
+        <div class="mk-muted">Channel</div><div class="mk-muted">Share of marketing payroll</div><div class="mk-muted mk-r">%</div><div class="mk-muted mk-r">$</div>
+        <div>Organic search</div><input type="range" min="0" max="100" step="0.5" data-ch="organic_search" aria-label="Organic search payroll share"><div class="mk-r" data-draw="paypct" data-ch="organic_search" data-source="channel_actuals" data-field="payroll_pct" data-where="channel=organic_search">—</div><div class="mk-r" data-draw="paycost" data-ch="organic_search" data-source="channel_actuals" data-field="payroll_cost" data-where="channel=organic_search">—</div>
+        <div>Paid search</div><input type="range" min="0" max="100" step="0.5" data-ch="paid_search" aria-label="Paid search payroll share"><div class="mk-r" data-draw="paypct" data-ch="paid_search" data-source="channel_actuals" data-field="payroll_pct" data-where="channel=paid_search">—</div><div class="mk-r" data-draw="paycost" data-ch="paid_search" data-source="channel_actuals" data-field="payroll_cost" data-where="channel=paid_search">—</div>
+        <div>Paid social</div><input type="range" min="0" max="100" step="0.5" data-ch="paid_social" aria-label="Paid social payroll share"><div class="mk-r" data-draw="paypct" data-ch="paid_social" data-source="channel_actuals" data-field="payroll_pct" data-where="channel=paid_social">—</div><div class="mk-r" data-draw="paycost" data-ch="paid_social" data-source="channel_actuals" data-field="payroll_cost" data-where="channel=paid_social">—</div>
+        <div>Event</div><input type="range" min="0" max="100" step="0.5" data-ch="event" aria-label="Event payroll share"><div class="mk-r" data-draw="paypct" data-ch="event" data-source="channel_actuals" data-field="payroll_pct" data-where="channel=event">—</div><div class="mk-r" data-draw="paycost" data-ch="event" data-source="channel_actuals" data-field="payroll_cost" data-where="channel=event">—</div>
+        <div>Referral</div><input type="range" min="0" max="100" step="0.5" data-ch="referral" aria-label="Referral payroll share"><div class="mk-r" data-draw="paypct" data-ch="referral" data-source="channel_actuals" data-field="payroll_pct" data-where="channel=referral">—</div><div class="mk-r" data-draw="paycost" data-ch="referral" data-source="channel_actuals" data-field="payroll_cost" data-where="channel=referral">—</div>
+        <div>Direct</div><input type="range" min="0" max="100" step="0.5" data-ch="direct" aria-label="Direct payroll share"><div class="mk-r" data-draw="paypct" data-ch="direct" data-source="channel_actuals" data-field="payroll_pct" data-where="channel=direct">—</div><div class="mk-r" data-draw="paycost" data-ch="direct" data-source="channel_actuals" data-field="payroll_cost" data-where="channel=direct">—</div>
+        <div>Partner</div><input type="range" min="0" max="100" step="0.5" data-ch="partner" aria-label="Partner payroll share"><div class="mk-r" data-draw="paypct" data-ch="partner" data-source="channel_actuals" data-field="payroll_pct" data-where="channel=partner">—</div><div class="mk-r" data-draw="paycost" data-ch="partner" data-source="channel_actuals" data-field="payroll_cost" data-where="channel=partner">—</div>
+        <div>Email</div><input type="range" min="0" max="100" step="0.5" data-ch="email" aria-label="Email payroll share"><div class="mk-r" data-draw="paypct" data-ch="email" data-source="channel_actuals" data-field="payroll_pct" data-where="channel=email">—</div><div class="mk-r" data-draw="paycost" data-ch="email" data-source="channel_actuals" data-field="payroll_cost" data-where="channel=email">—</div>
+        <div class="mk-pay-other">Other <span class="mk-muted">(not demand gen, e.g. Customer Success)</span></div><input class="mk-pay-other" type="range" min="0" max="100" step="0.5" data-ch="other" aria-label="Other, not demand gen, payroll share"><div class="mk-r mk-pay-other" data-draw="payotherpct" data-source="cac_summary" data-field="other_payroll_pct" data-row="0">—</div><div class="mk-r mk-pay-other" data-draw="payothercost" data-source="cac_summary" data-field="other_payroll_cost" data-row="0">—</div>
+      </div>
+      <p style="margin-top:10px">Allocated: <b data-draw="paytotal" data-source="channel_actuals" data-field="payroll_pct" data-where="channel=Total">—</b> <span data-draw="pay-warn">—</span></p>
+      <p style="margin-top:8px"><button class="mk-btn" id="btn-reset-pay" type="button">Reset channels to lead share</button> <button class="mk-btn" id="btn-reset-other" type="button">Set Other to 0%</button></p>
+    </section>
+
+    <details id="definitions">
+      <summary>Definitions and data notes</summary>
+      <ul>
+        <li><b>Lead:</b> every record in leads.csv, dated by the month it was created. <b>MQL:</b> a lead minus junk (spam/test, existing customers, repeat submissions), minus Disqualified leads whose reason is student or researcher, vendor pitch, too small or suspected competitor. Disqualified leads with no reason stay MQLs, as do Nurture or Working leads tagged too small.</li>
+        <li><b>SAL:</b> status Working or Converted to opportunity with no disqualification reason. Working leads that carry a reason (mostly existing customers) are not counted. SALs are dated by lead creation month; leads.csv has no acceptance date.</li>
+        <li><b>Opp:</b> a new-business opportunity linked from a lead, dated by created date. <b>Won:</b> Closed won, dated by close date. 16 opps created before Jan 2023 have no source lead; their 14 customers appear on the Churn tab and in the explorer, not in these counts.</li>
+        <li><b>Demand gen cost, inbound:</b> program spend + the slider's share of Marketing payroll + the SDR's loaded cost split by MQL share. Payroll marked Other (not demand gen) is excluded from demand gen cost and Full CAC. <b>Outbound:</b> 20 AE hours/week × loaded AE rate (<span data-draw="k-aerate" data-source="cost_month" data-field="ae_hourly_loaded" data-where="month=2026-10">—</span>/hr in <span class="mk-asof-month">—</span>).</li>
+        <li><b>Sales-side cost:</b> Sales payroll minus SDR and outbound prospecting cost. <b>Full CAC</b> = demand gen + sales side, per customer won. <b>CAC ratio</b> = that total ÷ new ARR won (excludes commissions).</li>
+        <li><b>Thin data:</b> cost per lead/MQL/SAL/opp flagged under 10 records in the stage; cost per customer and ACV under 5 wins; conversion rates under 30 records in the denominator.</li>
+        <li>Period-based: every count lands in the month it happened, so conversion rates mix cohorts.</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- ======================= CHURN ======================= -->
+  <section id="churn" class="mk-panel" role="tabpanel" hidden>
+    <p class="mk-lede">Customers signed <b data-draw="c-window">—</b>: <b data-draw="c-cust" data-source="churn_by_plan" data-field="customers" data-where="key=Total">—</b> customers, of whom <b data-draw="c-churn12" data-source="churn_by_plan" data-field="churn12_pct" data-where="key=Total">—</b> churned within 12 months of signing (among those old enough to measure).</p>
+    <section class="mk-controls" id="churn-controls">
+      <label>Signed from <select class="dash-select" data-draw="c-start" aria-label="Cohort start month" data-source="records"></select></label>
+      <label>to <select class="dash-select" data-draw="c-end" aria-label="Cohort end month" data-source="records"></select></label>
+      <button class="mk-btn" id="btn-c-2023" type="button">Since Jan 2023 (source known)</button>
+      <button class="mk-btn" id="btn-c-all" type="button">All customers (<span class="mk-first-year">—</span> on)</button>
+    </section>
+    <p class="mk-note">Acquisition source exists only for customers signed since Jan 2023. Customers signed earlier appear only if they were still active on 1 Jan 2023, so their early churn is missing and their 12- and 24-month churn rates read low. Compare plans within the Jan 2023+ cohort for a fair read.</p>
+
+    <section class="mk-tiles" id="churn-kpis">
+      <div class="mk-card mk-tile"><div class="mk-muted">Customers in cohort</div><div class="mk-big" data-draw="ck" data-f="customers" data-source="churn_by_plan" data-field="customers" data-where="key=Total">—</div></div>
+      <div class="mk-card mk-tile"><div class="mk-muted">Churned to date</div><div class="mk-big" data-draw="ck" data-f="churned_pct" data-source="churn_by_plan" data-field="churned_pct" data-where="key=Total">—</div></div>
+      <div class="mk-card mk-tile"><div class="mk-muted">Churned within 12 months</div><div class="mk-big" data-draw="ck" data-f="churn12_pct" data-source="churn_by_plan" data-field="churn12_pct" data-where="key=Total">—</div></div>
+      <div class="mk-card mk-tile"><div class="mk-muted">Churned within 24 months</div><div class="mk-big" data-draw="ck" data-f="churn24_pct" data-source="churn_by_plan" data-field="churn24_pct" data-where="key=Total">—</div></div>
+    </section>
+
+    <section class="mk-card" id="churn-chart-card">
+      <h2>12-month churn by source and plan</h2>
+      <p class="mk-muted" style="margin-bottom:8px">Share of customers old enough to measure who churned within 12 months of signing. Click a bar for the customers behind it.</p>
+      <div class="mk-two">
+        <div class="mk-chart" data-draw="churn-chart" data-dim="channel" data-source="churn_by_channel"></div>
+        <div class="mk-chart" data-draw="churn-chart" data-dim="plan" data-source="churn_by_plan"></div>
+      </div>
+    </section>
+
+    <section class="mk-card" id="churn-source">
+      <h2>By acquisition source</h2>
+      <div class="mk-scroll">
+        <table data-source="churn_by_channel" data-row-key="key">
+          <thead><tr><th data-field="key">Source</th><th data-field="customers">Customers</th><th data-field="churned">Churned</th><th data-field="churned_pct">Churned %</th><th data-field="elig12">Measurable at 12 mo</th><th data-field="churn12">Churned ≤12 mo</th><th data-field="churn12_pct">12-mo churn</th><th data-field="elig24">Measurable at 24 mo</th><th data-field="churn24">Churned ≤24 mo</th><th data-field="churn24_pct">24-mo churn</th><th data-field="arr_lost">ARR lost</th></tr></thead>
+          <tbody data-draw="churn-rows" data-dim="channel"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="mk-card" id="churn-plan">
+      <h2>By plan (package)</h2>
+      <div class="mk-scroll">
+        <table data-source="churn_by_plan" data-row-key="key">
+          <thead><tr><th data-field="key">Plan</th><th data-field="customers">Customers</th><th data-field="churned">Churned</th><th data-field="churned_pct">Churned %</th><th data-field="elig12">Measurable at 12 mo</th><th data-field="churn12">Churned ≤12 mo</th><th data-field="churn12_pct">12-mo churn</th><th data-field="elig24">Measurable at 24 mo</th><th data-field="churn24">Churned ≤24 mo</th><th data-field="churn24_pct">24-mo churn</th><th data-field="arr_lost">ARR lost</th></tr></thead>
+          <tbody data-draw="churn-rows" data-dim="plan"></tbody>
+        </table>
+      </div>
+    </section>
+    <details>
+      <summary>Definitions</summary>
+      <ul>
+        <li><b>Source:</b> the customer's acquisition channel, which matches the source channel of its won opportunity in every case. <b>Plan:</b> Core, Growth or Enterprise; no customer changed plan.</li>
+        <li><b>Measurable at 12 / 24 mo:</b> signed at least 12 / 24 months before <span class="mk-asof-long">—</span>. <b>12-mo churn:</b> of those, the share whose churn date falls within 12 months of signup. Contracts are annual, so this is the first-renewal loss rate.</li>
+        <li><b>ARR lost:</b> the last contract ARR of customers who churned. Thin data: churn rates flagged under 20 measurable customers.</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- ======================= BENCHMARKS ======================= -->
+  <section id="benchmarks" class="mk-panel" role="tabpanel" hidden>
+    <p class="mk-lede">Ledgerline against The SaaS CFO's 2026 SaaS Benchmarks Report (v13), using the $10–25K ACV band for retention and CAC metrics and the $5–20M ARR band for growth and cost ratios. Ledgerline values come from the data room benchmark analysis (trailing 12 months to Oct 2026) unless marked as from this dashboard.</p>
+    <section class="mk-card" id="bench-live">
+      <h2>From this dashboard</h2>
+      <div class="mk-scroll">
+        <table data-source="bench_live" data-row-key="metric">
+          <thead><tr><th data-field="metric">Metric</th><th data-field="value">Ledgerline</th><th data-field="p25">P25</th><th data-field="median">Median</th><th data-field="p75">P75</th><th data-field="position">Position</th></tr></thead>
+          <tbody data-draw="bench-live-rows"></tbody>
+        </table>
+      </div>
+      <p class="mk-muted" style="margin-top:8px">Follows the Demand gen tab's date window. Excludes commissions, so it runs a little under the data room figure below.</p>
+    </section>
+    <section class="mk-card" id="bench-table">
+      <h2>Benchmark table</h2>
+      <p class="mk-muted" style="margin-bottom:8px">Bar shows the P25–P75 range, tick at the median, dot at Ledgerline. For CAC ratios, payback and cost ratios, lower is better.</p>
+      <div class="mk-scroll">
+        <table data-source="benchmarks" data-row-key="metric">
+          <thead><tr><th data-field="metric">Metric</th><th data-field="cohort" class="mk-l">Cohort</th><th data-field="p25">P25</th><th data-field="median">Median</th><th data-field="p75">P75</th><th data-field="ledgerline">Ledgerline</th><th>Range</th><th data-field="read" class="mk-l">Read</th><th data-field="confidence" class="mk-l">Confidence</th><th data-field="source_key" class="mk-l">Source</th></tr></thead>
+          <tbody data-draw="bench-rows"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="mk-card" id="bench-sources">
+      <h2>Sources</h2>
+      <p class="mk-muted" style="margin-bottom:8px">The meta-report itself is in this project; links go to each original publisher so you can check a number at its source.</p>
+      <div class="mk-scroll">
+        <table data-source="bench_sources" data-row-key="source_key">
+          <thead><tr><th data-field="name">Source</th><th data-field="period" class="mk-l">Period / sample</th><th data-field="type" class="mk-l">Type</th><th data-field="used_for" class="mk-l">Used for</th><th data-field="url" class="mk-l">Link</th></tr></thead>
+          <tbody data-draw="source-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <!-- ======================= EXPLORER ======================= -->
+  <section id="explorer" class="mk-panel" role="tabpanel" hidden>
+    <p class="mk-lede">Every lead, joined to its opportunity and customer record, plus customers with no source lead. Filters here are the same ones a click on a number applies.</p>
+    <section class="mk-controls" id="x-controls">
+      <label>Stage
+        <select class="dash-select" data-x="stage" aria-label="Stage">
+          <option value="all">All records</option><option value="lead">Leads</option><option value="mql">MQLs</option><option value="sal">SALs</option><option value="opp">Opps</option><option value="won">Closed won</option><option value="customer">Customers</option>
+        </select>
+      </label>
+      <label>Channel / source
+        <select class="dash-select" data-x="channel" aria-label="Channel">
+          <option value="">All channels</option><option value="organic_search">Organic search</option><option value="paid_search">Paid search</option><option value="paid_social">Paid social</option><option value="event">Event</option><option value="referral">Referral</option><option value="direct">Direct</option><option value="partner">Partner</option><option value="email">Email</option><option value="outbound">Outbound</option><option value="unknown_pre2023">Unknown (signed pre-2023)</option>
+        </select>
+      </label>
+      <label>From <select class="dash-select" data-draw="x-months" data-x="start" aria-label="From month" data-source="records"></select></label>
+      <label>To <select class="dash-select" data-draw="x-months" data-x="end" aria-label="To month" data-source="records"></select></label>
+      <label>Lead status
+        <select class="dash-select" data-x="status" aria-label="Lead status">
+          <option value="">Any</option><option>Working</option><option>Converted to opportunity</option><option>Nurture</option><option>Unresponsive</option><option>Disqualified</option><option>Duplicate</option>
+        </select>
+      </label>
+      <label>Disqualification reason
+        <select class="dash-select" data-x="reason" aria-label="Disqualification reason">
+          <option value="">Any</option><option value="__none__">(none)</option><option value="__any__">(any reason)</option><option>Spam or test</option><option>Too small</option><option>Existing customer</option><option>Student or researcher</option><option>Vendor pitch</option><option>Repeat submission</option><option>Suspected competitor</option>
+        </select>
+      </label>
+      <label>Plan
+        <select class="dash-select" data-x="plan" aria-label="Plan"><option value="">Any</option><option>Core</option><option>Growth</option><option>Enterprise</option></select>
+      </label>
+      <label>Churn
+        <select class="dash-select" data-x="churn" aria-label="Churn">
+          <option value="">Any</option><option value="active">Active</option><option value="churned">Churned</option><option value="elig12">Measurable at 12 mo</option><option value="churn12">Churned within 12 mo</option><option value="elig24">Measurable at 24 mo</option><option value="churn24">Churned within 24 mo</option>
+        </select>
+      </label>
+      <label>Search <input class="mk-input mk-text" type="search" data-x="q" aria-label="Search company or ID" placeholder="Company, lead, opp or customer ID"></label>
+      <button class="mk-btn" id="btn-x-reset" type="button">Clear filters</button>
+    </section>
+    <p class="mk-muted">Dates apply to the <b data-draw="x-datebasis">—</b>.</p>
+    <p class="mk-note" data-draw="drill-note">—</p>
+    <div class="mk-chips" id="x-summary">
+      <span class="mk-chip"><b data-draw="xs" data-f="rows" data-source="explorer_summary" data-field="rows" data-row="0">—</b> rows</span>
+      <span class="mk-chip"><span data-draw="xs" data-f="leads" data-source="explorer_summary" data-field="leads" data-row="0">—</span> leads</span>
+      <span class="mk-chip"><span data-draw="xs" data-f="mqls" data-source="explorer_summary" data-field="mqls" data-row="0">—</span> MQLs</span>
+      <span class="mk-chip"><span data-draw="xs" data-f="sals" data-source="explorer_summary" data-field="sals" data-row="0">—</span> SALs</span>
+      <span class="mk-chip"><span data-draw="xs" data-f="opps" data-source="explorer_summary" data-field="opps" data-row="0">—</span> opps</span>
+      <span class="mk-chip"><span data-draw="xs" data-f="won" data-source="explorer_summary" data-field="won" data-row="0">—</span> won</span>
+      <span class="mk-chip"><span data-draw="xs" data-f="customers" data-source="explorer_summary" data-field="customers" data-row="0">—</span> customers</span>
+      <span class="mk-chip"><span data-draw="xs" data-f="churned" data-source="explorer_summary" data-field="churned" data-row="0">—</span> churned</span>
+    </div>
+    <div class="mk-card" style="padding:0">
+      <div class="mk-scroll">
+        <table data-source="explorer_rows" data-row-key="row_id" id="x-table">
+          <thead><tr>
+            <th data-field="row_id">ID</th><th data-field="record_type" class="mk-l">Type</th><th data-field="lead_created">Lead created</th><th data-field="channel" class="mk-l">Channel</th><th data-field="source_form" class="mk-l">Form</th>
+            <th data-field="lead_status" class="mk-l">Lead status</th><th data-field="disqualified_reason" class="mk-l">DQ reason</th><th data-field="company" class="mk-l">Company</th><th data-field="is_mql">MQL</th><th data-field="is_sal">SAL</th>
+            <th data-field="opportunity_id" class="mk-l">Opp</th><th data-field="opp_created">Opp created</th><th data-field="opp_stage" class="mk-l">Opp stage</th><th data-field="opp_close">Closed</th><th data-field="opp_arr">Won ARR</th>
+            <th data-field="customer_id" class="mk-l">Customer</th><th data-field="plan" class="mk-l">Plan</th><th data-field="signup_date">Signed</th><th data-field="customer_status" class="mk-l">Customer status</th><th data-field="churn_date">Churn date</th><th data-field="churned_12m">Churned ≤12 mo</th>
+          </tr></thead>
+          <tbody data-draw="x-rows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="mk-controls" style="align-items:center">
+      <button class="mk-btn" id="btn-x-prev" type="button">← Previous</button>
+      <span class="mk-muted" data-draw="x-page">—</span>
+      <button class="mk-btn" id="btn-x-next" type="button">Next →</button>
+    </div>
+    <section class="mk-card" id="drill-check">
+      <h2>Drill-through check</h2>
+      <p data-draw="check-summary" data-source="drill_check">—</p>
+      <ul class="mk-list" data-draw="check-fails" data-source="drill_check"></ul>
+    </section>
+  </section>
+
+  <!-- ======================= DATA HYGIENE ======================= -->
+  <section id="hygiene" class="mk-panel" role="tabpanel" hidden>
+    <p class="mk-lede">Known data quality problems in the uploaded files, ranked by how much they can distort the metrics. Use this as the operations team's queue: investigate and fix from the top. Counts cover all dates; click a count to open those records in the Data explorer.</p>
+    <p data-draw="hyg-summary" data-source="data_hygiene">—</p>
+    <div class="mk-card">
+      <table class="mk-table mk-hyg">
+        <colgroup><col class="c-n"><col class="c-p"><col class="c-i"><col class="c-r"><col><col></colgroup>
+        <thead><tr><th>#</th><th>Priority</th><th>Issue</th><th class="mk-r">Records</th><th>What it does to the metrics</th><th>What to investigate and fix</th></tr></thead>
+        <tbody data-draw="hyg-rows" data-source="data_hygiene"></tbody>
+      </table>
+    </div>
+    <div class="mk-card">
+      <h2>Cross-file checks that passed</h2>
+      <p class="mk-muted">How the files are matched: leads to opportunities by <code>opportunity_id</code> (new business only), won opportunities to customers by <code>customer_id</code>, customers to contracts by <code>customer_id</code>, and spend, sessions and payroll by month and channel or department. Names and emails are never used to join records. Each check below found no problems; any that did are in the list above.</p>
+      <div data-draw="hyg-passed" data-source="join_checks"></div>
+    </div>
+  </section>
+
+  <div class="mk-tip" data-draw="thin-tip" style="display:none"></div>
+</div>
+
+
+<dialog id="ai-preview" aria-labelledby="ai-preview-title">
+  <h2 id="ai-preview-title">Send these figures to Claude?</h2>
+  <p>This is the whole request that will go to <b id="ai-prev-model"></b> at api.anthropic.com: the figures below, plus fixed instructions telling Claude how to read them. Nothing is sent until you click Send.</p>
+  <ul class="mk-list" id="ai-prev-sections"></ul>
+  <p class="mk-muted" id="ai-prev-summary"></p>
+  <p class="mk-muted" id="ai-prev-fallback"></p>
+  <details><summary>Show the exact data (JSON)</summary><pre id="ai-prev-json"></pre></details>
+  <details><summary>Show the instructions and settings sent with it</summary><pre id="ai-prev-instructions"></pre></details>
+  <details><summary>Show the complete request body</summary><pre id="ai-prev-body"></pre></details>
+  <p class="mk-ai-actions"><button class="mk-btn" type="button" id="ai-cancel">Cancel</button> <button class="mk-btn mk-btn-primary" type="button" id="ai-send">Send to Claude</button></p>
+</dialog>
+
+<script src="d3.min.js"></script>
+<script src="benchmarks.js"></script>
+<script src="runtime.js"></script>
+<script src="core.js"></script>
+<script src="ingest.js"></script>
+<script src="ai.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
